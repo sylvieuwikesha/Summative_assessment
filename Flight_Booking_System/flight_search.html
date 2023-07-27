@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>AirlinesFresh Book - Flight Offer Search</title>
+    
+</head>
+<style>
+    body {
+        font-family: Arial, sans-serif;
+        margin: 20px;
+    }
+
+    h1 {
+        margin-bottom: 20px;
+    }
+
+    form {
+        display: flex;
+        flex-direction: column;
+        width: 300px;
+        margin-bottom: 20px;
+    }
+
+    label {
+        margin-bottom: 5px;
+    }
+
+    input[type="text"],
+    input[type="date"],
+    input[type="number"],select {
+        padding: 5px;
+        margin-bottom: 10px;
+    }
+
+    button {
+        padding: 8px 15px;
+        background-color: #007bff;
+        color: #fff;
+        border: none;
+        cursor: pointer;
+    }
+
+    #flightResults {
+        margin-top: 20px;
+    }
+/* Add this style to format the flight offer cards */
+.card {
+    border: 1px solid #ccc;
+    padding: 10px;
+    margin-bottom: 10px;
+}
+
+</style>
+<body>
+    <h1>Flight Offer Search</h1>
+    <form id="flightOfferForm">
+        <label for="departureCity">Departure City:</label>
+        <select id="departureCity" required>
+            <option value="">Select Departure City</option>
+        </select>
+
+        <label for="destinationCity">Destination City:</label>
+        <select id="destinationCity" required>
+            <option value="">Select Destination City</option>
+        </select>
+
+        <label for="departureDate">Departure Date:</label>
+        <input type="date" id="departureDate" required>
+
+        <label for="returnDate">Return Date:</label>
+        <input type="date" id="returnDate" required>
+
+        <label for="numAdults">Number of Adults:</label>
+        <input type="number" id="numAdults" min="1" value="1" required>
+
+        <button type="submit">Search Flights</button>
+    </form>
+
+    <div id="flightResults">
+        <!-- Flight search results will be displayed here -->
+    </div>
+    <script>
+document.addEventListener("DOMContentLoaded", () => {
+    const flightOfferForm = document.getElementById("flightOfferForm");
+    const flightResults = document.getElementById("flightResults");
+    const departureCitySelect = document.getElementById("departureCity");
+    const destinationCitySelect = document.getElementById("destinationCity");
+
+    // Function to fetch city data from the Amadeus API
+    async function fetchCityData(keyword='par') {
+        try {
+            const response = await fetch(`city.php?keyword=${encodeURIComponent(keyword)}&max=1000`);
+            const data = await response.json();
+            return data.data;
+        } catch (error) {
+            console.error("Error fetching city data:", error);
+            return [];
+        }
+    }
+
+    // Function to populate the dropdowns with city names
+    async function populateDropdowns() {
+        const departureCities = await fetchCityData('par');
+        const destinationCities = await fetchCityData('par');
+
+        for (const city of departureCities) {
+            const departureOption = document.createElement("option");
+            departureOption.value = city.iataCode;
+            departureOption.textContent = city.name;
+            departureCitySelect.appendChild(departureOption);
+        }
+
+        for (const city of destinationCities) {
+            const destinationOption = document.createElement("option");
+            destinationOption.value = city.iataCode;
+            destinationOption.textContent = city.name;
+            destinationCitySelect.appendChild(destinationOption);
+        }
+    }
+
+    populateDropdowns();
+
+    flightOfferForm.addEventListener("submit", (event) => {
+        event.preventDefault();
+
+        const departureCityCode = departureCitySelect.value;
+        const destinationCityCode = destinationCitySelect.value;
+        const departureDate = document.getElementById("departureDate").value;
+        const returnDate = document.getElementById("returnDate").value;
+        const numAdults = document.getElementById("numAdults").value;
+
+        // Call the backend API with the flight search parameters
+        fetchFlights(departureCityCode, destinationCityCode, departureDate, returnDate, numAdults);
+    });
+
+    // Function to fetch flight offers from the backend API
+    function fetchFlights(departureCityCode, destinationCityCode, departureDate, returnDate, numAdults) {
+        const url = `/a_flight/flight_search.php?departureCity=${encodeURIComponent(departureCityCode)}&destinationCity=${encodeURIComponent(destinationCityCode)}&departureDate=${encodeURIComponent(departureDate)}&returnDate=${encodeURIComponent(returnDate)}&adults=${encodeURIComponent(numAdults)}`;
+
+        fetch(url)
+            .then((response) => response.json())
+            .then((dataa) => {
+                // Clear existing flight results
+                flightResults.innerHTML = "";
+                // console.log(dataa);
+                // Generate cards for each flight offer
+                dataa.data.forEach((flightOffer) => {
+                    console.log(flightOffer);
+                    const card = createFlightCard(flightOffer);
+                    flightResults.appendChild(card);
+                });
+            })
+            .catch((error) => console.error("Error fetching flight offers:", error));
+    }
+
+    // Function to create a flight offer card
+    function createFlightCard(flightOffer) {
+        const card = document.createElement("div");
+        card.classList.add("card", "col-md-3", "m-2");
+
+        // Add flight offer details to the card
+        const airline = document.createElement("p");
+        airline.textContent = `Airline: ${flightOffer.validatingAirlineCodes[0]}`;
+        card.appendChild(airline);
+
+        const price = document.createElement("p");
+        price.textContent = `Price: ${flightOffer.price.currency} ${flightOffer.price.total}`;
+        card.appendChild(price);
+
+        const itineraries = document.createElement("p");
+        itineraries.textContent = "Itineraries:";
+        card.appendChild(itineraries);
+
+        const itineraryList = document.createElement("ul");
+        flightOffer.itineraries.forEach((itinerary) => {
+            const itineraryItem = document.createElement("li");
+            itineraryItem.textContent = `Duration: ${itinerary.duration}`;
+            itineraryList.appendChild(itineraryItem);
+        });
+        card.appendChild(itineraryList);
+
+        // Add the "Get Full Prices" button
+        const button = document.createElement("a");
+        button.classList.add("btn", "btn-primary");
+        button.textContent = "Get Full Prices for this Offer";
+        const encodedFlightOffer = btoa(JSON.stringify(flightOffer));
+        button.setAttribute("href", `book_price.php?flightOffer=${encodeURIComponent(encodedFlightOffer)}`);
+        card.appendChild(button);
+
+        return card;
+    }
+});
+
+    </script>
+</body>
+</html>
